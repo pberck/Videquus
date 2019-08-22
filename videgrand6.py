@@ -1,4 +1,6 @@
 # Run grand on data
+# Grand can be found here: https://github.com/caisr-hh/group-anomaly-detection
+# (Code below uses modified grand  version with changes in ref_group time period)
 #
 #python3 videgrand5.py --ref_group day12 -H
 #python3 videgrand5.py --ref_group day12 -H --start_dt "2018-08-01 22:00" --end_dt "2018-08-07 08:00"
@@ -69,6 +71,9 @@ parser.add_argument( "--train_start_dt", type=str, default="2018-08-01 22:00",
                      help='Start date of training' )
 parser.add_argument( "--train_end_dt", type=str,   default="2018-08-08 08:00",
                      help='Start date of training' )
+parser.add_argument( "--no_train", action='store_true', default=False,
+                     help='Do not run training step' )
+
 #
 #parser.add_argument( "--start_dt", type=str,       default="2018-09-08 22:00", help='Start date of reference' )
 #parser.add_argument( "--end_dt", type=str,         default="2018-09-16 08:00", help='Start date of reference' )
@@ -81,7 +86,7 @@ parser.add_argument( '-X', "--extra_text", type=str, default=None,
                      help='Extra text in filename' )
 args = parser.parse_args()
 
-# ave what we do for later
+# Save what we do for later including plots created
 invocation = "python3 " + ' '.join(quote(s) for s in sys.argv)
 with open( "invocation_log.txt", "a") as f:
     f.write( invocation + "\n" )
@@ -272,6 +277,8 @@ def plot(results_df, seq, fn_str=None, xtra=None):
         fn_str += "_"+xtra.replace(" ", "")
     if seq > -1:
         fn_str += "_seq"+str(seq)
+    if args.no_train:
+        fn_str += "_NT"
     if args.extra_text:
         fn_str += "_"+args.extra_text
     if os.path.exists( "grand1_"+fn_str+".png" ):
@@ -304,6 +311,8 @@ def plot_plain(results_df, seq, fn_str=None, xtra=None):
     if not fn_str:
         cols = "".join([c[0] for c in args.col_name.split("_")])
         fn_str = "cam"+str(args.cam_id)+"_plain"+"_C"+cols
+    if args.no_train:
+        fn_str += "_NT"
     if xtra:
         fn_str += "_"+xtra.replace(" ", "")
     if seq > -1:
@@ -365,89 +374,90 @@ else:
 # Training consists of pushing one week of data through the algorithm.
 # (Pretending we are "live")
 #
-print( "--------" )
-print( "Training" )
-print( "--------" )
-inside    = False
-processed = 0
-training  = []
-sequence  = 0
-train_start_dt = pd.to_datetime(args.train_start_dt, format='%Y-%m-%d %H:%M')
-train_end_dt   = pd.to_datetime(args.train_end_dt,   format='%Y-%m-%d %H:%M')
-print( args.train_start_dt, "--", args.train_end_dt )
-prev_dt = train_start_dt
-while True: # since we train outside of the loop, this can/should be simplified with a big select...
-    dt, x = next(generator)
-    if dt < train_start_dt:
-        continue
-    if not inside:
-        print( "New sequence", sequence, str(dt) )
-        inside = True
-    if dt >= train_end_dt:
-        print( "End sequence", sequence, str(dt) )
-        break # before hour check, otherwise we always get 1 in start of next day
-    curr_dt = dt
+if not args.no_train:
+    print( "--------" )
+    print( "Training" )
+    print( "--------" )
+    inside    = False
+    processed = 0
+    training  = []
+    sequence  = 0
+    train_start_dt = pd.to_datetime(args.train_start_dt, format='%Y-%m-%d %H:%M')
+    train_end_dt   = pd.to_datetime(args.train_end_dt,   format='%Y-%m-%d %H:%M')
+    print( args.train_start_dt, "--", args.train_end_dt )
+    prev_dt = train_start_dt
+    while True: # since we train outside of the loop, this can/should be simplified with a big select...
+        dt, x = next(generator)
+        if dt < train_start_dt:
+            continue
+        if not inside:
+            print( "New sequence", sequence, str(dt) )
+            inside = True
+        if dt >= train_end_dt:
+            print( "End sequence", sequence, str(dt) )
+            break # before hour check, otherwise we always get 1 in start of next day
+        curr_dt = dt
 
-    # To know we have started a new night, the jump is from 5:59 to 22:00
-    # Take an arbitrary 1 hour gap to start new night
-    if pd.Timedelta(dt - prev_dt).seconds > 3600:
-        print( "End sequence", sequence, str(prev_dt) )
-        sequence += 1
-        print( "New sequence", sequence, str(dt) )
-    prev_dt = dt
+        # To know we have started a new night, the jump is from 5:59 to 22:00
+        # Take an arbitrary 1 hour gap to start new night
+        if pd.Timedelta(dt - prev_dt).seconds > 3600:
+            print( "End sequence", sequence, str(prev_dt) )
+            sequence += 1
+            print( "New sequence", sequence, str(dt) )
+        prev_dt = dt
 
-    # "Train"
-    if args.type == "T": # for IndividualAnomalyTransductive
-        devContext = indev.predict(dt, x) #maybe it is enough to just push the data in?
-        st, pv, dev, isdev = devContext.strangeness, devContext.pvalue, devContext.deviation, devContext.is_deviating
-        training.append( [ dt, x[0], st, pv, dev, isdev, sequence ] )
-    else:
-        training.append( [ dt, x[0], 0, 0, 0, 0, sequence ] )
-    processed += 1
-    
-print( "processed, dt, x", processed, dt, x )
-#indev.fit( np.array( [[1,2,3], [4,5,6], [7,8,9]] ) )
-training_df = pd.DataFrame( training, columns=["dt", "x", "strangeness", "pvalue", "deviation", "isdevp", "seq"] )
-if args.type == "I":
-    indev.fit( training_df["x"].values.reshape(-1, 1) )
-#
-plot( training_df, -1, xtra="Training Data" )
-plot_plain( training_df, -1, xtra="Training Data" )
-plot_plain( training_df[(training_df["seq"]==1)], 1, xtra="Training Data" )
+        # "Train"
+        if args.type == "T": # for IndividualAnomalyTransductive
+            devContext = indev.predict(dt, x) #maybe it is enough to just push the data in?
+            st, pv, dev, isdev = devContext.strangeness, devContext.pvalue, devContext.deviation, devContext.is_deviating
+            training.append( [ dt, x[0], st, pv, dev, isdev, sequence ] )
+        else:
+            training.append( [ dt, x[0], 0, 0, 0, 0, sequence ] )
+        processed += 1
 
-# Plot a vline plot for each day, each day starting from 0+daynr to compare
-# the same time period over multiple days (they will be next to each other).
-fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12,4))
-lines = []
-#sequence_list = sorted(np.unique(training_df["seq"].values))
-#print( sequence_list )
-cs = [ "#1c641c", "#217821", "#278c27", "#2ca02c", "#32b432", "#38c838", "#4ccd4c", "#60d360" ] #greens
-for seq in range(0, sequence+1):
-    plot_df = training_df[(training_df["seq"]==seq)]
-    xticks = np.arange(0+seq, (plot_df.shape[0]*(sequence+2))+seq, sequence+2) # +2 to get spacing between groups
-    lws = np.where( plot_df["isdevp"].values > 0.1, 1, 1 )
-    colours = np.where( plot_df["isdevp"].values > 0.1, "#2ca02c", "#2ca02c") #https://www.colorhexa.com/ff7f0e
-    #colours = cs[seq%len(cs)] # not much difference anyway
-    line = ax.vlines( xticks, ymin=0, ymax=plot_df["x"].values,
-                      color=colours,
-                      lw=lws
-    )
-    lines.append( str(seq) )
-fn_str = "cam"+str(args.cam_id)+"dthresh"+str(args.dev_threshold)+"_"+args.ref_group+"_pval"+str(args.p_value)+"_"+args.measure+"_mgale"+str(args.martingale)+"_t"+args.type+"_overview_train"
-if args.extra_text:
-    fn_str += "_"+args.extra_text
-if os.path.exists( "grand1_"+fn_str+".png" ):
-    os.remove( "grand1_"+fn_str+".png" )
-fig.savefig("grand1_"+fn_str+".png", dpi=300)
-print( "Saved", "grand1_"+fn_str+".png" )
-with open( "invocation_log.txt", "a") as f:
-    f.write( "  "+"grand1_"+fn_str+".png\n" )
-plt.show(block=args.block)
-if args.block:
-    plt.pause(1)
-print( "--------------" )
-print( "Training ready" )
-print( "--------------" )
+    print( "processed, dt, x", processed, dt, x )
+    #indev.fit( np.array( [[1,2,3], [4,5,6], [7,8,9]] ) )
+    training_df = pd.DataFrame( training, columns=["dt", "x", "strangeness", "pvalue", "deviation", "isdevp", "seq"] )
+    if args.type == "I":
+        indev.fit( training_df["x"].values.reshape(-1, 1) )
+    #
+    plot( training_df, -1, xtra="Training Data" )
+    plot_plain( training_df, -1, xtra="Training Data" )
+    plot_plain( training_df[(training_df["seq"]==1)], 1, xtra="Training Data" )
+
+    # Plot a vline plot for each day, each day starting from 0+daynr to compare
+    # the same time period over multiple days (they will be next to each other).
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12,4))
+    lines = []
+    #sequence_list = sorted(np.unique(training_df["seq"].values))
+    #print( sequence_list )
+    cs = [ "#1c641c", "#217821", "#278c27", "#2ca02c", "#32b432", "#38c838", "#4ccd4c", "#60d360" ] #greens
+    for seq in range(0, sequence+1):
+        plot_df = training_df[(training_df["seq"]==seq)]
+        xticks = np.arange(0+seq, (plot_df.shape[0]*(sequence+2))+seq, sequence+2) # +2 to get spacing between groups
+        lws = np.where( plot_df["isdevp"].values > 0.1, 1, 1 )
+        colours = np.where( plot_df["isdevp"].values > 0.1, "#2ca02c", "#2ca02c") #https://www.colorhexa.com/ff7f0e
+        #colours = cs[seq%len(cs)] # not much difference anyway
+        line = ax.vlines( xticks, ymin=0, ymax=plot_df["x"].values,
+                          color=colours,
+                          lw=lws
+        )
+        lines.append( str(seq) )
+    fn_str = "cam"+str(args.cam_id)+"dthresh"+str(args.dev_threshold)+"_"+args.ref_group+"_pval"+str(args.p_value)+"_"+args.measure+"_mgale"+str(args.martingale)+"_t"+args.type+"_overview_train"
+    if args.extra_text:
+        fn_str += "_"+args.extra_text
+    if os.path.exists( "grand1_"+fn_str+".png" ):
+        os.remove( "grand1_"+fn_str+".png" )
+    fig.savefig("grand1_"+fn_str+".png", dpi=300)
+    print( "Saved", "grand1_"+fn_str+".png" )
+    with open( "invocation_log.txt", "a") as f:
+        f.write( "  "+"grand1_"+fn_str+".png\n" )
+    plt.show(block=args.block)
+    if args.block:
+        plt.pause(1)
+    print( "--------------" )
+    print( "Training ready" )
+    print( "--------------" )
 
 # ------------------------------------------------------------------------
 # Here we reset out data, and start feeding the "live" data
@@ -546,6 +556,8 @@ for seq in range(0, sequence+1):
 
 cols = "".join([c[0] for c in args.col_name.split("_")])
 fn_str = "cam"+str(args.cam_id)+"dthresh"+str(args.dev_threshold)+"_"+args.ref_group+"_pval"+str(args.p_value)+"_"+args.measure+"_mgale"+str(args.martingale)+"_t"+args.type+"_C"+cols+"_overview"
+if args.no_train:
+    fn_str += "_NT"
 if args.extra_text:
     fn_str += "_"+args.extra_text
 if os.path.exists( "grand1_"+fn_str+".png" ):
