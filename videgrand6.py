@@ -25,6 +25,7 @@ import pprint
 
 import scipy
 import operator
+import time
 
 import dtw
 from sklearn.metrics.pairwise import manhattan_distances
@@ -44,7 +45,7 @@ parser.add_argument( '-C', "--col_name", type=str, default="average_movement",
 parser.add_argument( '-p', "--p_value", type=float, default=0.6,
                      help='P-value' )
 parser.add_argument( "--ref_group", type=str, default="week",
-                     help='Reference group' )
+                     help='Reference group (day12=one night, day36=seven nights' )
 parser.add_argument( "--dev_threshold", type=float, default=0.6,
                      help='Threshold on dev level' )
 parser.add_argument( "--measure", type=str, default="median",
@@ -62,7 +63,7 @@ parser.add_argument( '-d', "--days", type=int, default=7,
                      help='Days to calculate normal on' )
 parser.add_argument( '-n', "--non_conformity", type=str, default="median",
                      help='Non-conformity (median, knn, lof)' )
-##
+#
 parser.add_argument( "--start_dt", type=str,       default="2018-08-08 22:00",
                      help='Start date of reference' )
 parser.add_argument( "--end_dt", type=str,         default="2018-08-16 08:00",
@@ -71,15 +72,14 @@ parser.add_argument( "--train_start_dt", type=str, default="2018-08-01 22:00",
                      help='Start date of training' )
 parser.add_argument( "--train_end_dt", type=str,   default="2018-08-08 08:00",
                      help='Start date of training' )
+#parser.add_argument( "--start_dt", type=str,       default="2018-08-18 22:00", help='Start date of reference' )
+#parser.add_argument( "--end_dt", type=str,         default="2018-08-24 08:00", help='Start date of reference' )
+#parser.add_argument( "--train_start_dt", type=str, default="2018-08-10 22:00", help='Start date of training' )
+#parser.add_argument( "--train_end_dt", type=str,   default="2018-08-18 08:00", help='Start date of training' )
+#
 parser.add_argument( "--no_train", action='store_true', default=False,
                      help='Do not run training step' )
-
 #
-#parser.add_argument( "--start_dt", type=str,       default="2018-09-08 22:00", help='Start date of reference' )
-#parser.add_argument( "--end_dt", type=str,         default="2018-09-16 08:00", help='Start date of reference' )
-#parser.add_argument( "--train_start_dt", type=str, default="2018-09-01 22:00", help='Start date of training' )
-#parser.add_argument( "--train_end_dt", type=str,   default="2018-09-08 08:00", help='Start date of training' )
-##
 parser.add_argument( '-H', "--high_only", action='store_false', default=True,
                      help='Show high deviations only' )
 parser.add_argument( '-X', "--extra_text", type=str, default=None,
@@ -501,8 +501,14 @@ for dt, x in generator:
     my_dt += my_td
     st, pv, dev, isdev = devContext.strangeness, devContext.pvalue, devContext.deviation, devContext.is_deviating
     if args.high_only or isdev:
-        print("Time: {} ==> strangeness: {:.5f}, p-value: {:.5f}, deviation: {:.5f} ({})".format(
-            dt, st, pv, dev, "high" if isdev else "low")
+        # unix timestamp to find video sequence. Do I need to add summertime offset, 1 or 2 hrs?
+        # tl_20180903T062836Z-1536886119754.ts.mp4
+        # -->         tl_XXXZ-1533939960000.ts
+        #tz_seconds = -time.timezone
+        #epoch = f"tl_XXXZ- {(dt+tz_seconds).strftime('%s')} 000.ts"
+        epoch = f"tl_XXXZ- {dt.strftime('%s')} nnn.ts"
+        print("Time: {} ==> strangeness: {:.5f}, p-value: {:.5f}, deviation: {:.5f} ({})  {}".format(
+            dt, st, pv, dev, "high" if isdev else "low", epoch)
         )
     results.append( [ dt, x[0], st, pv, dev, isdev, sequence ] ) # note the x[0]
     counter -= 1
