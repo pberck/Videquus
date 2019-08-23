@@ -1,6 +1,6 @@
 # Run grand on data
 # Grand can be found here: https://github.com/caisr-hh/group-anomaly-detection
-# (Code below uses modified grand  version with changes in ref_group time period)
+# (Code below uses modified grand version with changes in ref_group time period)
 #
 #python3 videgrand5.py --ref_group day12 -H
 #python3 videgrand5.py --ref_group day12 -H --start_dt "2018-08-01 22:00" --end_dt "2018-08-07 08:00"
@@ -149,10 +149,9 @@ class CAMSERIES(TSERIES):
         self.end_date   = str(self.end_dt)[0:10] 
         print( "CAMSERIES", self.start_date, "-", self.end_date )
     def generate_samples(self, cam=0,
-                         #col="average_movement",
-                         #col="exp_weighted_moving_average",
                          col=args.col_name,
-                         rs=None, hours=[22,23,0,1,2,3,4,5]): 
+                         rs=None,
+                         hours=[22,23,0,1,2,3,4,5]):  # JUST THE NIGHT TIME
         '''
         Generate one data sample (eg movement for next frame).
         '''
@@ -288,7 +287,6 @@ def plot(results_df, seq, fn_str=None, xtra=None):
     with open( "invocation_log.txt", "a") as f:
         f.write( "  "+"grand1_"+fn_str+".png\n" )
 
-
 def plot_plain(results_df, seq, fn_str=None, xtra=None):
     '''
     Plot movement data only, without the cosmo data.
@@ -326,7 +324,6 @@ def plot_plain(results_df, seq, fn_str=None, xtra=None):
     with open( "invocation_log.txt", "a") as f:
         f.write( "  "+"grand1_"+fn_str+".png\n" )
 
-
 '''
 q = RSERIES()
 qgen = q.generate_samples()
@@ -338,7 +335,6 @@ sys.exit(1)
 bb = CAMSERIES( "CameraMinuteSensorData.csv" )
 #bb = RSERIES()
 
-# Generate a week's train data first, train, then run?
 '''
 generator = bb.generate_slices(cam=11,
                                start_slice=pd.to_datetime("2018-08-01 22:00", format='%Y-%m-%d %H:%M'),
@@ -355,7 +351,7 @@ train_data = [x for x in generator]
 
 generator = bb.generate_samples( cam=args.cam_id, rs=args.resample_time )
 
-# Choose between the Transductive or Indictive version.
+# Choose between the Transductive or Inductive version.
 if args.type == "T":
     indev = IndividualAnomalyTransductive(w_martingale=args.martingale,  # Window size for computing the deviation level
                                           non_conformity=args.measure,   # Strangeness measure: "median","knn","lof"
@@ -373,6 +369,7 @@ else:
 # Train
 # Training consists of pushing one week of data through the algorithm.
 # (Pretending we are "live")
+# Can be switched off.
 #
 if not args.no_train:
     print( "--------" )
@@ -472,7 +469,7 @@ my_dt    = pd.Timestamp(2018, 1, 1, 0)
 my_td    = pd.Timedelta(args.resample_time)
 results  = []
 start_dt = pd.to_datetime(args.start_dt, format='%Y-%m-%d %H:%M')
-end_dt   = pd.to_datetime(args.end_dt, format='%Y-%m-%d %H:%M')
+end_dt   = pd.to_datetime(args.end_dt,   format='%Y-%m-%d %H:%M')
 curr_dt  = start_dt
 prev_dt  = start_dt
 sequence = 0
@@ -521,7 +518,6 @@ print( results_df )
 #print( results_df["x"].values )
 
 plot( results_df, -1 )
-#plt.show(block=False)
 
 # ------------
 # Plot a vlines diagram with data grouped per period (22-06).
@@ -529,17 +525,6 @@ plot( results_df, -1 )
 # TODO: fix a-axis (show only time?) Fake time axis, use strings?
 # ------------
 #
-cat20_colours = [
-    "#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c",
-    "#98df8a", "#d62728", "#ff9896", "#9467bd", "#c5b0d5",
-    "#8c564b", "#c49c94", "#e377c2", "#f7b6d2", "#7f7f7f",
-    "#c7c7c7", "#bcbd22", "#dbdb8d", "#17becf", "#9edae5",
-    #https://sashat.me/2017/01/11/list-of-20-simple-distinct-colors/
-    #"#e6194B", "#3cb44b", "#ffe119", "#4363d8", "#f58231",
-    #"#911eb4", "#42d4f4", "#f032e6", "#bfef45", "#fabebe",
-    "#469990", "#e6beff", "#9A6324", "#fffac8", "#800000",
-    "#aaffc3", "#808000", "#ffd8b1", "#000075", "#a9a9a9"
-]
 fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12,4))
 lines = []
 for seq in range(0, sequence+1):
@@ -553,7 +538,6 @@ for seq in range(0, sequence+1):
     colours = np.where( plot_df["isdevp"].values > 0.1, "#ff7f0e", "#0e8eff") #https://www.colorhexa.com/ff7f0e
     line = ax.vlines( xticks, ymin=0, ymax=plot_df["x"].values,
                       color=colours,
-                      #color=cat20_colours[ seq % len(cat20_colours) ],
                       lw=lws
     )
     lines.append( str(seq) )
@@ -572,11 +556,5 @@ fig.savefig("grand1_"+fn_str+".png", dpi=300)
 print( "Saved", "grand1_"+fn_str+".png" )
 with open( "invocation_log.txt", "a") as f:
     f.write( "  "+"grand1_"+fn_str+".png\n" )
-
-
-#xlocs = ax.get_xticks()
-#xlabels = ax.get_xticklabels()
-#print( [x for x in xlabels] )
-#xticks(ticks, [labels], **kwargs)  # Set locations and labels
 
 plt.show(block=args.block)
