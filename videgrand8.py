@@ -1,5 +1,6 @@
 # Run grand on data
 # Uses the updated grand code (w/o hacks)
+# python3 videgrand8.py -H -b -c 999 -C exp_weighted_moving_average -R --end_dt "2018-08-12 08:00" --martingale 10
 #
 import matplotlib as mpl
 mpl.use('qt5agg') #https://github.com/matplotlib/matplotlib/issues/9637
@@ -26,6 +27,11 @@ from sklearn.metrics.pairwise import manhattan_distances
 
 from grand import IndividualAnomalyTransductive
 from grand import IndividualAnomalyInductive
+
+np.random.seed( 28 )
+random.seed( 28 )
+#np.random.seed( 12 )
+#random.seed( 12 )
 
 parser = argparse.ArgumentParser()
 parser.add_argument( '-b', "--block", action='store_true', default=False,
@@ -81,6 +87,8 @@ parser.add_argument( '-X', "--extra_text", type=str, default=None,
 #
 parser.add_argument( '-R', "--random_data", action='store_true', default=False,
                      help='Use (pseudo)random data' )
+parser.add_argument( "-e", "--extension", type=str, default="png",
+                     help='Plot file extension' )
 
 args = parser.parse_args()
 
@@ -226,6 +234,7 @@ def plot(results_df, seq, fn_str=None, xtra=None):
     Plot a time series and cosmo output data.
     '''
     strangeness = True
+    '''
     if strangeness:
         fig0, axes = plt.subplots(nrows=3, ncols=1, sharex=True, figsize=(12,6))
         ax0 = axes[0]
@@ -235,6 +244,13 @@ def plot(results_df, seq, fn_str=None, xtra=None):
         fig0, axes = plt.subplots(nrows=2, ncols=1, sharex=True, figsize=(12,6))
         ax0 = axes[0]
         ax1 = axes[1]
+    '''
+    # To connect the ax0/ax2 we need to do it like this:
+    fig0 = plt.figure( figsize=(12,6) )
+    ax0  = plt.subplot( 311 )
+    ax1  = plt.subplot( 312, sharex=ax0 )
+    ax2  = plt.subplot( 313, sharey=ax0, sharex=ax1 )
+    
     fig0.suptitle( "cam:"+str(args.cam_id)+" dev_threshold:"+str(args.dev_threshold)+" "+args.ref_group +
                    " p-val:"+str(args.p_value)+" non_conformity:"+args.measure+ " martingale:"+str(args.martingale) +
                    " type:"+args.type )
@@ -285,12 +301,12 @@ def plot(results_df, seq, fn_str=None, xtra=None):
         fn_str += "_TR"
     if args.extra_text:
         fn_str += "_"+args.extra_text
-    if os.path.exists( "grand1_"+fn_str+".png" ):
-        os.remove( "grand1_"+fn_str+".png" )
-    fig0.savefig("grand1_"+fn_str+".png", dpi=300)
-    print( "Saved", "grand1_"+fn_str+".png" )
+    if os.path.exists( "grand1_"+fn_str+"."+args.extension ):
+        os.remove( "grand1_"+fn_str+"."+args.extension )
+    fig0.savefig("grand1_"+fn_str+"."+args.extension, dpi=300)
+    print( "Saved", "grand1_"+fn_str+"."+args.extension )
     with open( "invocation_log.txt", "a") as f:
-        f.write( "  "+"grand1_"+fn_str+".png\n" )
+        f.write( "  "+"grand1_"+fn_str+"."+args.extension+"\n" )
 
 def plot_plain(results_df, seq, fn_str=None, xtra=None):
     '''
@@ -322,12 +338,12 @@ def plot_plain(results_df, seq, fn_str=None, xtra=None):
         fn_str += "_seq"+str(seq)
     if args.extra_text:
         fn_str += "_"+args.extra_text
-    if os.path.exists( "grand1_"+fn_str+".png" ):
-        os.remove( "grand1_"+fn_str+".png" )
-    fig0.savefig("grand1_"+fn_str+".png", dpi=300)
-    print( "Saved", "grand1_"+fn_str+".png" )
+    if os.path.exists( "grand1_"+fn_str+"."+args.extension ):
+        os.remove( "grand1_"+fn_str+"."+args.extension )
+    fig0.savefig("grand1_"+fn_str+"."+args.extension, dpi=300)
+    print( "Saved", "grand1_"+fn_str+"."+args.extension )
     with open( "invocation_log.txt", "a") as f:
-        f.write( "  "+"grand1_"+fn_str+".png\n" )
+        f.write( "  "+"grand1_"+fn_str+"."+args.extension+"\n" )
 
 '''
 q = RSERIES()
